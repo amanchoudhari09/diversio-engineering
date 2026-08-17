@@ -3,8 +3,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
+  title: 'HRIS Import Preview | People Ops',
+  description: 'Validate employee reporting relationships before importing HRIS data.',
   generator: 'v0.app',
   icons: {
     icon: [

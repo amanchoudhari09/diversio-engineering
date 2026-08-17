@@ -1,47 +1,40 @@
+'use client'
+
+import { useMemo, useRef, useState } from 'react'
+import { AlertTriangle, Check, ChevronDown, CircleHelp, FileSpreadsheet, Loader2, RefreshCw, Search, Upload, Users, X } from 'lucide-react'
+import { analyzeDemo, type Employee, type HRISAnalysis } from '@/lib/api'
+
+const tabs = ['Overview', 'Validation errors', 'Roots', 'Managers', 'Cycles', 'Accepted employees'] as const
+type Tab = (typeof tabs)[number]
+
+function StatusPill({ children, tone = 'neutral' }: { children: React.ReactNode; tone?: 'neutral' | 'success' | 'danger' | 'warning' }) {
+  const styles = { neutral: 'bg-muted text-muted-foreground', success: 'bg-emerald-500/12 text-emerald-300', danger: 'bg-rose-500/12 text-rose-300', warning: 'bg-amber-500/12 text-amber-300' }
+  return <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${styles[tone]}`}>{children}</span>
+}
+
+function Metric({ label, value, tone = 'default' }: { label: string; value: number; tone?: 'default' | 'success' | 'danger' | 'warning' }) {
+  const colors = { default: 'text-foreground', success: 'text-emerald-300', danger: 'text-rose-300', warning: 'text-amber-300' }
+  return <div className="border-l border-border pl-5"><p className="text-xs text-muted-foreground">{label}</p><p className={`mt-1 text-2xl font-semibold tracking-tight ${colors[tone]}`}>{value}</p></div>
+}
+
+function EmployeeTable({ employees }: { employees: Employee[] }) {
+  return <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead><tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground"><th className="px-5 py-3 font-medium">Employee</th><th className="px-5 py-3 font-medium">Department</th><th className="px-5 py-3 font-medium">Manager</th><th className="px-5 py-3 font-medium">Status</th></tr></thead><tbody className="divide-y divide-border">{employees.map((employee) => <tr key={employee.employee_id} className="hover:bg-accent/40"><td className="px-5 py-3.5"><div className="font-medium text-foreground">{employee.name}</div><div className="mt-0.5 text-xs text-muted-foreground">{employee.employee_id} · {employee.email}</div></td><td className="px-5 py-3.5 text-muted-foreground">{employee.department}</td><td className="px-5 py-3.5 text-muted-foreground">{employee.manager_name ?? <span className="italic">No manager</span>}</td><td className="px-5 py-3.5"><StatusPill tone={employee.status === 'accepted' ? 'success' : 'danger'}>{employee.status}</StatusPill></td></tr>)}</tbody></table></div>
+}
+
 export default function Page() {
-  return (
-    <main
-      style={{
-        colorScheme: 'light dark',
-        position: 'relative',
-        display: 'flex',
-        minHeight: '100vh',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'light-dark(#fff, #000)',
-        color: 'light-dark(#000, #fff)',
-      }}
-    >
-      <svg
-        aria-hidden="true"
-        style={{ width: 80, height: 80 }}
-        width={80}
-        height={80}
-        fill="none"
-        viewBox="0 0 20 20"
-        xmlns="http://www.w3.org/2000/svg"
-        stroke="currentColor"
-        strokeWidth="0.5"
-      >
-        <path
-          d="M14.2 14.2H17V6.9375C17 4.76288 15.2371 3 13.0625 3H5.8V5.8M14.2 14.2V7.79063L7.79062 14.2H14.2ZM14.2 14.2V17H6.9375C4.76288 17 3 15.2371 3 13.0625V5.8H5.8M5.8 5.8V12.2313L12.2313 5.8H5.8Z"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <p
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: 'calc(50% + 56px)',
-          transform: 'translateX(-50%)',
-          whiteSpace: 'nowrap',
-          fontSize: '14px',
-          fontWeight: 500,
-          color: 'light-dark(#71717a, #a1a1aa)',
-        }}
-      >
-        Your v0 generation will show here.
-      </p>
-    </main>
-  )
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [analysis, setAnalysis] = useState<HRISAnalysis | null>(null)
+  const [file, setFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [tab, setTab] = useState<Tab>('Overview')
+  const [query, setQuery] = useState('')
+  const [dragging, setDragging] = useState(false)
+
+  const selectFile = (nextFile?: File) => { if (!nextFile) return; setError(''); setFile(nextFile); setAnalysis(null) }
+  const analyze = async () => { if (!file) return; setLoading(true); setError(''); try { setAnalysis(await analyzeDemo(file)); setTab('Overview') } catch (err) { setError(err instanceof Error ? err.message : 'Unable to analyze this file.') } finally { setLoading(false) } }
+  const filteredEmployees = useMemo(() => analysis?.employees.filter((employee) => [employee.name, employee.email, employee.department, employee.employee_id].join(' ').toLowerCase().includes(query.toLowerCase())) ?? [], [analysis, query])
+  const errors = analysis?.validation_errors.filter((item) => item.severity === 'error') ?? []
+
+  return <main className="min-h-screen bg-background text-foreground"><header className="border-b border-border bg-card/80"><div className="mx-auto flex max-w-[1440px] items-center justify-between px-6 py-4"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground"><FileSpreadsheet className="size-5" /></div><div><p className="text-sm font-semibold tracking-tight">People Ops</p><p className="text-xs text-muted-foreground">HRIS import tools</p></div></div><div className="flex items-center gap-4 text-xs text-muted-foreground"><span className="hidden sm:inline">Django API connected</span><span className="size-2 rounded-full bg-emerald-400" /><button aria-label="Help" className="rounded-md p-2 hover:bg-accent"><CircleHelp className="size-4" /></button><div className="flex size-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">AC</div></div></div></header><div className="mx-auto max-w-[1440px] px-6 py-8"><div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">Data operations</p><h1 className="text-3xl font-semibold tracking-tight text-balance">HRIS import preview</h1><p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">Upload an employee CSV to validate reporting relationships before committing changes to your directory.</p></div>{analysis && <button onClick={() => { setAnalysis(null); setFile(null) }} className="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-accent"><RefreshCw className="size-4" /> New import</button>}</div><section className="rounded-xl border border-border bg-card shadow-sm"><div className="p-6"><div onDragOver={(event) => { event.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); selectFile(event.dataTransfer.files[0]) }} className={`flex min-h-36 flex-col items-center justify-center rounded-lg border border-dashed px-6 py-8 text-center transition-colors ${dragging ? 'border-primary bg-primary/10' : 'border-border bg-background/40'}`}><div className="mb-3 flex size-10 items-center justify-center rounded-full bg-secondary"><Upload className="size-5 text-primary" /></div><p className="text-sm font-medium">Drop your employee CSV here</p><p className="mt-1 text-xs text-muted-foreground">or choose a file from your computer · CSV up to 10 MB</p><button onClick={() => inputRef.current?.click()} className="mt-4 rounded-md border border-border bg-card px-3 py-2 text-xs font-medium hover:bg-accent">Browse files</button><input ref={inputRef} className="sr-only" type="file" accept=".csv,text/csv" onChange={(event) => selectFile(event.target.files?.[0])} /></div>{file && <div className="mt-4 flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3"><div className="flex min-w-0 items-center gap-3"><FileSpreadsheet className="size-4 shrink-0 text-primary" /><div className="min-w-0"><p className="truncate text-sm font-medium">{file.name}</p><p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB selected</p></div></div><button aria-label="Remove file" onClick={() => setFile(null)} className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"><X className="size-4" /></button></div>}{error && <div role="alert" className="mt-4 flex items-center gap-2 rounded-lg border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-300"><AlertTriangle className="size-4 shrink-0" />{error}</div>}<div className="mt-5 flex items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Validation runs in the Django service; the preview never parses CSV data in the browser.</p><button disabled={!file || loading} onClick={analyze} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">{loading ? <><Loader2 className="size-4 animate-spin" /> Analyzing…</> : <>Analyze import <ChevronDown className="size-4 rotate-[-90deg]" /></>}</button></div></div></section>{analysis && <div className="mt-8 space-y-5"><section className="grid gap-5 rounded-xl border border-border bg-card p-5 sm:grid-cols-2 lg:grid-cols-5"><Metric label="Rows processed" value={analysis.summary.total_rows} /><Metric label="Accepted" value={analysis.summary.accepted} tone="success" /><Metric label="Rejected" value={analysis.summary.rejected} tone="danger" /><Metric label="Errors" value={analysis.summary.errors} tone="danger" /><Metric label="Warnings" value={analysis.summary.warnings} tone="warning" /></section><div className="flex gap-1 overflow-x-auto border-b border-border">{tabs.map((item) => <button key={item} onClick={() => setTab(item)} className={`whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors ${tab === item ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>{item}{item === 'Validation errors' && errors.length > 0 && <span className="ml-2 rounded-full bg-rose-500/15 px-1.5 py-0.5 text-xs text-rose-300">{errors.length}</span>}</button>)}</div>{tab === 'Overview' && <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]"><section className="rounded-xl border border-border bg-card p-5"><div className="mb-4 flex items-center justify-between"><div><h2 className="font-semibold">Import status</h2><p className="mt-1 text-xs text-muted-foreground">{analysis.file_name} · processed just now</p></div><StatusPill tone="success"><Check className="mr-1 size-3" /> Ready to review</StatusPill></div><div className="space-y-3 text-sm"><div className="flex items-start gap-3 rounded-lg bg-emerald-500/8 p-3"><Check className="mt-0.5 size-4 text-emerald-300" /><div><p className="font-medium">{analysis.summary.accepted} employees can be imported</p><p className="mt-1 text-xs leading-5 text-muted-foreground">All required fields are present and employee IDs are unique.</p></div></div><div className="flex items-start gap-3 rounded-lg bg-amber-500/8 p-3"><AlertTriangle className="mt-0.5 size-4 text-amber-300" /><div><p className="font-medium">Relationships need attention</p><p className="mt-1 text-xs leading-5 text-muted-foreground">One cycle affects two employees. Their downstream records remain visible for review.</p></div></div></div></section><section className="rounded-xl border border-border bg-card p-5"><h2 className="font-semibold">Organization shape</h2><p className="mt-1 text-xs text-muted-foreground">Computed from manager relationships</p><div className="mt-5 space-y-4"><div className="flex items-center justify-between text-sm"><span className="text-muted-foreground">Root employees</span><span className="font-semibold">{analysis.roots.length}</span></div><div className="flex items-center justify-between text-sm"><span className="text-muted-foreground">Reporting cycles</span><span className="font-semibold text-amber-300">{analysis.cycles.length}</span></div><div className="flex items-center justify-between text-sm"><span className="text-muted-foreground">Departments</span><span className="font-semibold">{new Set(analysis.employees.map((item) => item.department)).size}</span></div></div></section></div>}{tab === 'Validation errors' && <section className="rounded-xl border border-border bg-card"><div className="border-b border-border p-5"><h2 className="font-semibold">Validation errors and warnings</h2><p className="mt-1 text-xs text-muted-foreground">Review these relationship issues before importing.</p></div><div className="divide-y divide-border">{analysis.validation_errors.map((item, index) => <div key={`${item.code}-${index}`} className="flex gap-3 p-5"><div className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full ${item.severity === 'error' ? 'bg-rose-500/15 text-rose-300' : 'bg-amber-500/15 text-amber-300'}`}>{item.severity === 'error' ? <X className="size-4" /> : <AlertTriangle className="size-4" />}</div><div><div className="flex flex-wrap items-center gap-2"><span className="font-medium">{item.code.replaceAll('_', ' ')}</span><StatusPill tone={item.severity === 'error' ? 'danger' : 'warning'}>{item.severity}</StatusPill><span className="text-xs text-muted-foreground">{item.employee_id}</span></div><p className="mt-1 text-sm text-muted-foreground">{item.message}</p></div></div>)}</div></section>}{tab === 'Roots' && <section className="rounded-xl border border-border bg-card p-5"><h2 className="font-semibold">Root employees</h2><p className="mt-1 text-xs text-muted-foreground">Employees without a manager in this import.</p><div className="mt-5"><EmployeeTable employees={analysis.roots} /></div></section>}{tab === 'Managers' && <section className="rounded-xl border border-border bg-card p-5"><h2 className="font-semibold">Managers and direct reports</h2><p className="mt-1 text-xs text-muted-foreground">Relationship index returned by the API.</p><div className="mt-5 grid gap-3 sm:grid-cols-2">{analysis.managers.map(({ employee, direct_reports }) => <div key={employee.employee_id} className="rounded-lg border border-border p-4"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-full bg-secondary text-sm font-semibold">{employee.name.split(' ').map((name) => name[0]).join('')}</div><div><p className="font-medium">{employee.name}</p><p className="text-xs text-muted-foreground">{employee.department}</p></div></div><div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><Users className="size-4" /> {direct_reports.length} direct reports</div></div>)}</div></section>}{tab === 'Cycles' && <section className="rounded-xl border border-border bg-card p-5"><h2 className="font-semibold">Reporting cycles</h2><p className="mt-1 text-xs text-muted-foreground">Cycles are relationship warnings, not automatic row deletions.</p><div className="mt-5 space-y-3">{analysis.cycles.map((cycle) => <div key={cycle.path} className="rounded-lg border border-amber-400/30 bg-amber-400/8 p-4"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 size-4 text-amber-300" /><div><p className="font-medium text-amber-100">Direct reporting cycle</p><p className="mt-1 text-sm text-muted-foreground">{cycle.path}</p><p className="mt-2 text-xs text-muted-foreground">Affected IDs: {cycle.employee_ids.join(', ')}</p></div></div></div>)}</div></section>}{tab === 'Accepted employees' && <section className="rounded-xl border border-border bg-card"><div className="flex flex-col justify-between gap-4 border-b border-border p-5 md:flex-row md:items-center"><div><h2 className="font-semibold">Accepted employees</h2><p className="mt-1 text-xs text-muted-foreground">{filteredEmployees.length} of {analysis.employees.length} employees shown</p></div><label className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"><Search className="size-4 text-muted-foreground" /><span className="sr-only">Search accepted employees</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search employees" className="w-44 bg-transparent outline-none placeholder:text-muted-foreground" /></label></div><EmployeeTable employees={filteredEmployees} /></section>}</div>}</div></main>
 }
